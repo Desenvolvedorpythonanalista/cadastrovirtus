@@ -157,12 +157,15 @@ if st.button('Enviar'):
     # Salvar os dados no banco de dados
     salvar_dados(conn, nome, telefone, email, investidor, capital, alocacao)
     
-    st.success('Dados enviados e salvos com sucesso!')
+    # Manter a mensagem e o link que você pediu para não mudar
+    st.success(
+        "Teste realizado com sucesso! Vou dar uma olhada no seu perfil e te contatar em breve. Enquanto isso, conheça mais sobre nossos serviços e oportunidades em nosso site oficial: [Visite nosso site](https://perfildecliente-bx5se8ftwibx9xprerpcrd.streamlit.app)."
+    )
 
 # Fechar a conexão com o banco de dados
 conn.close()
 
-# Adicionar links para o site e para o processo de empreendedorismo
+# Manter o link que você pediu para não mudar
 st.markdown(
     """
     [Acesse o site oficial da Virtus](https://perfildecliente-bx5se8ftwibx9xprerpcrd.streamlit.app/)
