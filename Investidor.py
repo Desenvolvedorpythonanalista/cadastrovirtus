@@ -198,7 +198,7 @@ if st.button('Gerar Relatório'):
                 f.write(f"{chave}: R$ {valor:,.2f}\n")
                 
         st.success(
-            "Teste realizado com sucesso! Vou dar uma olhada no seu perfil e te contatar em breve. Enquanto isso, conheça mais sobre nossos serviços e oportunidades em nosso site oficial: [Visite nosso site](https://www.seusite.com.br)."
+            "Teste realizado com sucesso! Vou dar uma olhada no seu perfil e te contatar em breve. Enquanto isso, conheça mais sobre nossos serviços e oportunidades em nosso site oficial: [Visite nosso site](https://perfildecliente-bx5se8ftwibx9xprerpcrd.streamlit.app)."
         )
     else:
         st.error("Por favor, preencha todos os campos obrigatórios (Nome, Telefone e Email) antes de gerar o relatório.")
