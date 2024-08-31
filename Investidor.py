@@ -1,114 +1,86 @@
 import streamlit as st
 import matplotlib.pyplot as plt
+import sqlite3
 import os
+
+# Função para criar/abrir conexão com o banco de dados SQLite
+def conectar_bd():
+    conn = sqlite3.connect('clientes.db')
+    return conn
+
+# Função para criar a tabela no banco de dados, se não existir
+def criar_tabela(conn):
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            telefone TEXT,
+            email TEXT,
+            investidor TEXT,
+            capital TEXT,
+            patrimonio REAL,
+            valor_virtus REAL,
+            reserva_emergencia REAL,
+            custos_abertura REAL,
+            custos_trafego REAL,
+            treinamento_empresarial REAL,
+            infraestrutura REAL
+        )
+    ''')
+    conn.commit()
+
+# Função para salvar os dados do cliente no banco de dados
+def salvar_dados(conn, nome, telefone, email, investidor, capital, alocacao):
+    conn.execute('''
+        INSERT INTO clientes 
+        (nome, telefone, email, investidor, capital, patrimonio, valor_virtus, reserva_emergencia, custos_abertura, custos_trafego, treinamento_empresarial, infraestrutura) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (nome, telefone, email, investidor, capital, alocacao['Valor em Patrimônio'], alocacao['10% para o valor de investimento na Virtus'], 
+          alocacao['30% para reserva de emergência'], alocacao['10% para custos de abertura'], alocacao['20% para custos de tráfego'], 
+          alocacao['15% para Treinamento Empresarial'], alocacao['15% para infraestrutura']))
+    conn.commit()
 
 # Função para mostrar as informações de alocação e gerar o gráfico de pizza
 def mostrar_alocacao_e_grafico(investidor, capital):
     alocacoes = {
         'Inicial': {
-            '20mil': {
-                'Valor em Patrimônio': 60000,
-                '10% para o valor de investimento na Virtus': 2000,
-                '30% para reserva de emergência': 6000,
-                '10% para custos de abertura': 2000,
-                '20% para custos de tráfego': 4000,
-                '15% para Treinamento Empresarial': 3000,
-                '15% para infraestrutura': 3000,
-            },
-            '40mil': {
-                'Valor em Patrimônio': 120000,
-                '10% para o valor de investimento na Virtus': 4000,
-                '30% para reserva de emergência': 12000,
-                '10% para custos de abertura': 4000,
-                '20% para custos de tráfego': 8000,
-                '15% para Treinamento Empresarial': 6000,
-                '15% para infraestrutura': 6000,
-            },
-            '60mil': {
-                'Valor em Patrimônio': 180000,
-                '10% para o valor de investimento na Virtus': 6000,
-                '30% para reserva de emergência': 18000,
-                '10% para custos de abertura': 6000,
-                '20% para custos de tráfego': 12000,
-                '15% para Treinamento Empresarial': 9000,
-                '15% para infraestrutura': 9000,
-            },
-            '80mil': {
-                'Valor em Patrimônio': 240000,
-                '10% para o valor de investimento na Virtus': 8000,
-                '30% para reserva de emergência': 24000,
-                '10% para custos de abertura': 8000,
-                '20% para custos de tráfego': 16000,
-                '15% para Treinamento Empresarial': 12000,
-                '15% para infraestrutura': 12000,
-            },
-            '100mil': {
-                'Valor em Patrimônio': 300000,
-                '10% para o valor de investimento na Virtus': 10000,
-                '30% para reserva de emergência': 30000,
-                '10% para custos de abertura': 10000,
-                '20% para custos de tráfego': 20000,
-                '15% para Treinamento Empresarial': 15000,
-                '15% para infraestrutura': 15000,
-            }
+            '20mil': {'Valor em Patrimônio': 60000, '10% para o valor de investimento na Virtus': 2000, '30% para reserva de emergência': 6000,
+                      '10% para custos de abertura': 2000, '20% para custos de tráfego': 4000, '15% para Treinamento Empresarial': 3000,
+                      '15% para infraestrutura': 3000},
+            '40mil': {'Valor em Patrimônio': 120000, '10% para o valor de investimento na Virtus': 4000, '30% para reserva de emergência': 12000,
+                      '10% para custos de abertura': 4000, '20% para custos de tráfego': 8000, '15% para Treinamento Empresarial': 6000,
+                      '15% para infraestrutura': 6000},
+            '60mil': {'Valor em Patrimônio': 180000, '10% para o valor de investimento na Virtus': 6000, '30% para reserva de emergência': 18000,
+                      '10% para custos de abertura': 6000, '20% para custos de tráfego': 12000, '15% para Treinamento Empresarial': 9000,
+                      '15% para infraestrutura': 9000},
+            '80mil': {'Valor em Patrimônio': 240000, '10% para o valor de investimento na Virtus': 8000, '30% para reserva de emergência': 24000,
+                      '10% para custos de abertura': 8000, '20% para custos de tráfego': 16000, '15% para Treinamento Empresarial': 12000,
+                      '15% para infraestrutura': 12000},
+            '100mil': {'Valor em Patrimônio': 300000, '10% para o valor de investimento na Virtus': 10000, '30% para reserva de emergência': 30000,
+                       '10% para custos de abertura': 10000, '20% para custos de tráfego': 20000, '15% para Treinamento Empresarial': 15000,
+                       '15% para infraestrutura': 15000}
         },
         'Intermediário': {
-            '200mil': {
-                'Valor em Patrimônio': 600000,
-                '10% para o valor de investimento na Virtus': 20000,
-                '30% para reserva de emergência': 60000,
-                '10% para custos de abertura': 20000,
-                '20% para custos de tráfego': 40000,
-                '15% para Treinamento Empresarial': 30000,
-                '15% para infraestrutura': 30000,
-            },
-            '400mil': {
-                'Valor em Patrimônio': 1200000,
-                '10% para o valor de investimento na Virtus': 40000,
-                '30% para reserva de emergência': 120000,
-                '10% para custos de abertura': 40000,
-                '20% para custos de tráfego': 80000,
-                '15% para Treinamento Empresarial': 60000,
-                '15% para infraestrutura': 60000,
-            },
-            '600mil': {
-                'Valor em Patrimônio': 1800000,
-                '10% para o valor de investimento na Virtus': 60000,
-                '30% para reserva de emergência': 180000,
-                '10% para custos de abertura': 60000,
-                '20% para custos de tráfego': 120000,
-                '15% para Treinamento Empresarial': 90000,
-                '15% para infraestrutura': 90000,
-            },
-            '800mil': {
-                'Valor em Patrimônio': 2400000,
-                '10% para o valor de investimento na Virtus': 80000,
-                '30% para reserva de emergência': 240000,
-                '10% para custos de abertura': 80000,
-                '20% para custos de tráfego': 160000,
-                '15% para Treinamento Empresarial': 120000,
-                '15% para infraestrutura': 120000,
-            },
-            '1milhão': {
-                'Valor em Patrimônio': 3000000,
-                '10% para o valor de investimento na Virtus': 100000,
-                '30% para reserva de emergência': 300000,
-                '10% para custos de abertura': 100000,
-                '20% para custos de tráfego': 200000,
-                '15% para Treinamento Empresarial': 150000,
-                '15% para infraestrutura': 150000,
-            }
+            '200mil': {'Valor em Patrimônio': 600000, '10% para o valor de investimento na Virtus': 20000, '30% para reserva de emergência': 60000,
+                       '10% para custos de abertura': 20000, '20% para custos de tráfego': 40000, '15% para Treinamento Empresarial': 30000,
+                       '15% para infraestrutura': 30000},
+            '400mil': {'Valor em Patrimônio': 1200000, '10% para o valor de investimento na Virtus': 40000, '30% para reserva de emergência': 120000,
+                       '10% para custos de abertura': 40000, '20% para custos de tráfego': 80000, '15% para Treinamento Empresarial': 60000,
+                       '15% para infraestrutura': 60000},
+            '600mil': {'Valor em Patrimônio': 1800000, '10% para o valor de investimento na Virtus': 60000, '30% para reserva de emergência': 180000,
+                       '10% para custos de abertura': 60000, '20% para custos de tráfego': 120000, '15% para Treinamento Empresarial': 90000,
+                       '15% para infraestrutura': 90000},
+            '800mil': {'Valor em Patrimônio': 2400000, '10% para o valor de investimento na Virtus': 80000, '30% para reserva de emergência': 240000,
+                       '10% para custos de abertura': 80000, '20% para custos de tráfego': 160000, '15% para Treinamento Empresarial': 120000,
+                       '15% para infraestrutura': 120000},
+            '1milhão': {'Valor em Patrimônio': 3000000, '10% para o valor de investimento na Virtus': 100000, '30% para reserva de emergência': 300000,
+                        '10% para custos de abertura': 100000, '20% para custos de tráfego': 200000, '15% para Treinamento Empresarial': 150000,
+                        '15% para infraestrutura': 150000}
         },
         'Avançado': {
-            '1milhão': {
-                'Valor em Patrimônio': 3000000,
-                '10% para o valor de investimento na Virtus': 100000,
-                '30% para reserva de emergência': 300000,
-                '10% para custos de abertura': 100000,
-                '20% para custos de tráfego': 200000,
-                '15% para Treinamento Empresarial': 150000,
-                '15% para infraestrutura': 150000,
-            }
+            '1milhão': {'Valor em Patrimônio': 3000000, '10% para o valor de investimento na Virtus': 100000, '30% para reserva de emergência': 300000,
+                        '10% para custos de abertura': 100000, '20% para custos de tráfego': 200000, '15% para Treinamento Empresarial': 150000,
+                        '15% para infraestrutura': 150000}
         }
     }
     alocacao = alocacoes[investidor][capital]
@@ -160,45 +132,39 @@ nivels_capital = {
     'Avançado': ['1milhão']
 }
 
-# Seleção do valor de investimento
 capital = st.selectbox(
-    'Selecione o valor de investimento:',
+    'Selecione o capital disponível:',
     nivels_capital[investidor]
 )
 
-# Mostrar alocação e gráfico baseado na seleção
-if st.button('Gerar Relatório'):
-    if nome and telefone and email:
-        alocacao, fig = mostrar_alocacao_e_grafico(investidor, capital)
-        
-        st.subheader(f'Investimento com Capital de {capital}')
-        st.write(f'**Valor em Patrimônio:** R$ {alocacao["Valor em Patrimônio"]:,.2f}')
-        for chave, valor in alocacao.items():
-            if chave != 'Valor em Patrimônio':
-                st.write(f'**{chave}:** R$ {valor:,.2f}')
+# Conectar ao banco de dados e criar a tabela, se não existir
+conn = conectar_bd()
+criar_tabela(conn)
 
-        st.subheader('Distribuição do Capital')
-        st.pyplot(fig)
-        
-        # Salvar dados em arquivo
-        caminho_pasta = 'Simulacoes'
-        if not os.path.exists(caminho_pasta):
-            os.makedirs(caminho_pasta)
-        
-        nome_arquivo = f"{nome.replace(' ', '_')}_{telefone.replace(' ', '_')}_{email.replace('@', '_').replace('.', '_')}.txt"
-        caminho_arquivo = os.path.join(caminho_pasta, nome_arquivo)
-        
-        with open(caminho_arquivo, 'w') as f:
-            f.write(f"Nome: {nome}\n")
-            f.write(f"Telefone: {telefone}\n")
-            f.write(f"Email: {email}\n")
-            f.write(f"Tipo de Investidor: {investidor}\n")
-            f.write(f"Valor de Investimento: {capital}\n")
-            for chave, valor in alocacao.items():
-                f.write(f"{chave}: R$ {valor:,.2f}\n")
-                
-        st.success(
-            "Teste realizado com sucesso! Vou dar uma olhada no seu perfil e te contatar em breve. Enquanto isso, conheça mais sobre nossos serviços e oportunidades em nosso site oficial: [Visite nosso site](https://perfildecliente-bx5se8ftwibx9xprerpcrd.streamlit.app)."
-        )
-    else:
-        st.error("Por favor, preencha todos os campos obrigatórios (Nome, Telefone e Email) antes de gerar o relatório.")
+# Botão para enviar os dados e gerar o gráfico
+if st.button('Enviar'):
+    alocacao, grafico = mostrar_alocacao_e_grafico(investidor, capital)
+    
+    # Exibir as informações de alocação
+    st.subheader('Informações de Alocação de Capital')
+    for key, value in alocacao.items():
+        st.write(f"{key}: {value}")
+    
+    # Exibir o gráfico de pizza
+    st.subheader('Distribuição do Capital')
+    st.pyplot(grafico)
+    
+    # Salvar os dados no banco de dados
+    salvar_dados(conn, nome, telefone, email, investidor, capital, alocacao)
+    
+    st.success('Dados enviados e salvos com sucesso!')
+
+# Fechar a conexão com o banco de dados
+conn.close()
+
+# Adicionar links para o site e para o processo de empreendedorismo
+st.markdown(
+    """
+    [Acesse o site oficial da Virtus](https://perfildecliente-bx5se8ftwibx9xprerpcrd.streamlit.app/)
+    """
+)
