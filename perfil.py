@@ -3,13 +3,7 @@ import json
 import streamlit as st
 import sqlite3
 from fpdf import FPDF
-
-# Definir o diretório de logos
-LOGOS_DIR = 'logos'  # Usando um caminho relativo
-
-# Criar o diretório se não existir
-if not os.path.exists(LOGOS_DIR):
-    os.makedirs(LOGOS_DIR)
+from tempfile import NamedTemporaryFile
 
 # Função para criar conexão com o banco de dados
 def create_connection():
@@ -33,7 +27,6 @@ def create_table():
                     website TEXT,
                     client_type TEXT,
                     contact_name TEXT,
-                    contact_position TEXT,
                     email TEXT,
                     phone TEXT,
                     address TEXT,
@@ -42,7 +35,7 @@ def create_table():
                     desired_revenue TEXT,
                     services TEXT,
                     payment_methods TEXT,
-                    budget TEXT,
+                    source TEXT,
                     business_field TEXT,
                     business_type TEXT,
                     context TEXT,
@@ -51,7 +44,9 @@ def create_table():
                     difficulties TEXT,
                     cnpj_or_cpf TEXT,
                     logo_path TEXT,
-                    logo_provided BOOLEAN
+                    pdf_path TEXT,
+                    video_path TEXT,
+                    employees TEXT
                 )
             ''')
             conn.commit()
@@ -61,27 +56,27 @@ def create_table():
             conn.close()
 
 # Função para inserir dados no banco de dados
-def insert_data(data, logo_path=None):
+def insert_data(data, logo_path=None, pdf_path=None, video_path=None):
     conn = create_connection()
     if conn is not None:
         try:
             cursor = conn.cursor()
             columns = [
-                'company_name', 'website', 'client_type', 'contact_name', 'contact_position',
-                'email', 'phone', 'address', 'no_physical_address', 'capital', 'desired_revenue',
-                'services', 'payment_methods', 'budget', 'business_field', 'business_type', 'context',
-                'return_time', 'market_analysis', 'difficulties', 'cnpj_or_cpf', 'logo_path', 'logo_provided'
+                'company_name', 'website', 'client_type', 'contact_name', 
+                'email', 'phone', 'address', 'no_physical_address', 
+                'capital', 'desired_revenue', 'services', 'payment_methods', 
+                'source', 'business_field', 'business_type', 'context', 
+                'return_time', 'market_analysis', 'difficulties', 
+                'cnpj_or_cpf', 'logo_path', 'pdf_path', 'video_path', 'employees'
             ]
 
-            # Remove colunas que não estão no formulário
-            columns_to_insert = [col for col in columns if col not in ['contact_position']]
-            placeholders = ', '.join('?' for _ in columns_to_insert)
-            query = f'INSERT INTO profiles ({", ".join(columns_to_insert)}) VALUES ({placeholders})'
+            placeholders = ', '.join('?' for _ in columns)
+            query = f'INSERT INTO profiles ({", ".join(columns)}) VALUES ({placeholders})'
 
-            # Convert lists to JSON strings
             values = [json.dumps(item) if isinstance(item, list) else item for item in data]
             values.append(logo_path if logo_path else None)
-            values.append(1 if logo_path else 0)
+            values.append(pdf_path if pdf_path else None)
+            values.append(video_path if video_path else None)
 
             cursor.execute(query, values)
             conn.commit()
@@ -98,10 +93,10 @@ def generate_pdf(data, logo_path=None):
 
     headings = [
         "Nome da Empresa/Cliente", "Site", "Tipo de Cliente", "Nome do Contato", "Cidade", "E-mail", "Telefone",
-        "Endereço", "Não Possuo Endereço Físico", "Nível de Capital Disponível", "Faturamento Desejado",
-        "Serviços Requeridos", "Forma de Pagamento Preferida", "Orçamento Disponível", "Ramo de Negócio",
+        "Endereço", "Não Possuo Endereço Físico", "Valor de Capital Disponível", "Faturamento Desejado",
+        "Serviços Requeridos", "Forma de Pagamento Preferida", "Meio pelo qual veio", "Ramo de Negócio",
         "Tipo de Negócio", "Contexto e Objetivos", "Tempo para Retorno Desejado", "Análise de Mercado", "Dificuldades Enfrentadas",
-        "CNPJ/CPF"
+        "CNPJ/CPF", "Número de Funcionários"
     ]
 
     pdf.set_fill_color(255, 255, 255)
@@ -115,18 +110,19 @@ def generate_pdf(data, logo_path=None):
         
         pdf.cell(200, 10, txt=f"{heading}: {value}", ln=True, align='L')
 
-    if logo_path:
+    if logo_path and os.path.exists(logo_path):
         try:
             pdf.image(logo_path, x=10, y=pdf.get_y() + 10, w=50)
         except Exception as e:
             st.error(f"Erro ao adicionar logo ao PDF: {e}")
 
-    # Salvar o PDF na pasta 'logos'
-    pdf_output_path = os.path.join(LOGOS_DIR, 'client_profile.pdf')
-    try:
-        pdf.output(pdf_output_path)
-    except Exception as e:
-        st.error(f"Erro ao salvar PDF: {e}")
+    # Salvar o PDF em um arquivo temporário
+    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        pdf_output_path = tmp_file.name
+        try:
+            pdf.output(pdf_output_path)
+        except Exception as e:
+            st.error(f"Erro ao salvar PDF: {e}")
     return pdf_output_path
 
 # Função para recuperar e exibir dados do banco de dados
@@ -176,6 +172,7 @@ st.markdown("""
 # Variável para controlar se o formulário foi enviado
 submitted = False
 pdf_path = None
+video_path = None
 
 # Formulário de entrada
 with st.form(key='profile_form'):
@@ -197,103 +194,104 @@ with st.form(key='profile_form'):
         phone = f"({phone_dd}) {phone_number}"
 
     with col2:
-        market_segment = st.selectbox("Segmento de Mercado", ["B2B", "B2C", "B2G", "Outro"])   
+        market_segment = st.multiselect("Segmento de Mercado (Escolha todas as opções que se aplicam)", 
+                                        ["B2B", "B2C", "Ainda não decidi"])   
         address = st.text_input("Endereço Físico")
         no_physical_address = st.checkbox("Não possuo endereço físico")
-        capital = st.text_input("Valor de Capital Disponível")
-        desired_revenue = st.text_input("Faturamento Desejado")
-
-        services_options = ["Jurídico", "Proteção de Marca", "Sistemas de Gestão Comercial", "Automatização", 
-                            "Marketing", "Negócio Digital", "Social Media", "Site/Landing Page", "Tráfego", 
-                            "Contabilidade", "Produto (MVP)"]
-        services = st.multiselect("Serviços Requeridos (Escolha todas as opções que se aplicam)", services_options)
-
-        payment_methods_options = ["Boleto Bancário", "Transferência Bancária", "Cartão de Crédito", "Débito em Conta", 
-                                   "Pagamento Online (PayPal, etc.)", "Outros"]
-        payment_methods = st.multiselect("Forma de Pagamento Preferida (Escolha todas as opções que se aplicam)", 
-                                         payment_methods_options)
         
-        # Novo campo de orçamento disponível
-        budget = st.text_input("Orçamento Disponível")
+        capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1milhão", "Acima de 1 milhão"]
+        capital = st.selectbox("Valor de Capital Disponível", capital_options)
+        
+        desired_revenue = st.text_input("Faturamento Desejado")
+        services = st.multiselect("Serviços Requeridos (Escolha todos que se aplicam)", 
+                                  ["Desenvolvimento Web", "Consultoria", "Marketing", "Design", "Análise de Dados", "Outros"])
+        
+        payment_methods = st.multiselect("Forma de Pagamento Preferida", 
+                                         ["Boleto", "Cartão de Crédito", "Transferência Bancária", "Pix", "Outro"])
+        
+        source_options = ["Indicação", "YouTube", "Google", "Evento/Treinamento", "Redes sociais"]
+        source = st.selectbox("Meio pelo qual veio", source_options)
 
     with col3:
-        cnpj_or_cpf = st.text_input("CNPJ/CPF")
-        business_field_options = ["Tecnologia", "Educação", "Saúde", "Finanças", "Indústria", "Varejo", "Serviços"]
-        business_field = st.selectbox("Ramo de Negócio", business_field_options)
+        business_field_options = ["Tecnologia", "Saúde", "Educação", "Financeiro", "Indústria", "Varejo", "Serviços", "Agronegócio", "Outra", "Ainda não decidi"]
+        business_field = st.multiselect("Ramo de Negócio (Escolha todos que se aplicam)", business_field_options)
         
-        business_type_options = ["Startup", "Pequena Empresa", "Média Empresa", "Grande Empresa", "Holding"]
-        business_type = st.selectbox("Tipo de Negócio", business_type_options)
+        business_type = st.selectbox("Tipo de Negócio", ["Novo", "Em crescimento", "Estável", "Em dificuldade", "Ainda não decidi"])
         
         context = st.text_area("Contexto e Objetivos")
-        return_time = st.text_input("Tempo para Retorno Desejado")
-        market_analysis = st.checkbox("Fez análise de mercado?")
+        
+        return_time_options = ["Até 3 meses", "Até 6 meses", "Até 1 ano", "Entre 1 a 5 anos", "Acima de 5 anos"]
+        return_time = st.selectbox("Tempo para Retorno Desejado", return_time_options)
+        
+        market_analysis = st.checkbox("Já realizou análise de mercado?")
         difficulties = st.text_area("Dificuldades Enfrentadas")
-        logo_provided = st.checkbox("Logo fornecida")
-        logo_file = st.file_uploader("Carregar Logo", type=["jpg", "jpeg", "png"])
+        cnpj_or_cpf = st.text_input("CNPJ/CPF")
+        
+        employees_options = ["Não", "1-5", "6-10", "11-20", "21-50", "51-100", "101-200", "201-500", "501-1000", "Acima de 1000"]
+        employees = st.selectbox("Possui Funcionários?", employees_options)
 
-    # Botão de envio
+    # Adicionar upload de logo e vídeo
+    logo = st.file_uploader("Logo da Empresa (opcional)", type=['png', 'jpg', 'jpeg'])
+    video = st.file_uploader("Vídeo de Apresentação (opcional)", type=['mp4', 'mov'])
+
+    # Botão de envio do formulário
     submit_button = st.form_submit_button(label='Enviar')
 
     if submit_button:
-        # Verificação dos campos obrigatórios
-        if not company_name or not email or not phone or not (services or budget):
-            st.error("Por favor, preencha todos os campos obrigatórios.")
-        else:
-            # Salvar logo no diretório
-            logo_path = None
-            if logo_provided and logo_file:
-                try:
-                    logo_path = os.path.join(LOGOS_DIR, logo_file.name)
-                    with open(logo_path, "wb") as f:
-                        f.write(logo_file.getvalue())
-                except Exception as e:
-                    st.error(f"Erro ao salvar o logo: {e}")
-            
-            # Preparar os dados para inserção
-            data = [
-                company_name, website if not website_no_site else 'Não disponível', 
-                json.dumps(client_type), contact_name, city, email, phone, 
-                address if not no_physical_address else 'Não disponível', 
-                capital, desired_revenue, json.dumps(services), json.dumps(payment_methods), 
-                budget, business_field, business_type, context, return_time, market_analysis, 
-                difficulties, cnpj_or_cpf
-            ]
-            
-            # Inserir dados no banco de dados
-            insert_data(data, logo_path)
-            
-            # Gerar PDF
-            pdf_path = generate_pdf(data, logo_path)
-            submitted = True
+        submitted = True
+        logo_path = None
+        if logo is not None:
+            logo_path = f"uploads/{company_name}_logo.{logo.type.split('/')[1]}"
+            with open(logo_path, 'wb') as f:
+                f.write(logo.read())
+        
+        video_path = None
+        if video is not None:
+            video_path = f"uploads/{company_name}_video.{video.type.split('/')[1]}"
+            with open(video_path, 'wb') as f:
+                f.write(video.read())
+        
+        data = [company_name, website if not website_no_site else "Não disponível", client_type, contact_name, 
+                email, phone, address if not no_physical_address else "Não disponível", no_physical_address,
+                capital, desired_revenue, services, payment_methods, source, business_field, business_type, 
+                context, return_time, market_analysis, difficulties, cnpj_or_cpf, employees]
+        
+        pdf_path = generate_pdf(data, logo_path)
+        insert_data(data, logo_path=logo_path, pdf_path=pdf_path, video_path=video_path)
 
-# Exibir dados salvos e o PDF
-if submitted:
-    st.success("Dados enviados com sucesso!")
-    
-    # Exibir dados
-    st.write("**Dados Enviados:**")
-    st.json({
-        "Nome da Empresa/Cliente": company_name,
-        "Site": website if not website_no_site else 'Não disponível',
-        "Tipo de Cliente": client_type,
-        "Nome do Contato": contact_name,
-        "Cidade": city,
-        "E-mail": email,
-        "Telefone": phone,
-        "Endereço": address if not no_physical_address else 'Não disponível',
-        "Valor de Capital Disponível": capital,
-        "Faturamento Desejado": desired_revenue,
-        "Serviços Requeridos": services,
-        "Forma de Pagamento Preferida": payment_methods,
-        "Orçamento Disponível": budget,
-        "Ramo de Negócio": business_field,
-        "Tipo de Negócio": business_type,
-        "Contexto e Objetivos": context,
-        "Tempo para Retorno Desejado": return_time,
-        "Análise de Mercado": market_analysis,
-        "Dificuldades Enfrentadas": difficulties,
-        "CNPJ/CPF": cnpj_or_cpf
+        st.success("Dados enviados e PDF gerado com sucesso!")
+
+# Mostrar o botão de download do PDF fora do formulário
+if pdf_path:
+    st.download_button(label="Baixar PDF", data=open(pdf_path, 'rb').read(), file_name="client_profile.pdf", mime="application/pdf")
+
+# Mostrar os dados recuperados do banco de dados
+data = get_data()
+if data:
+    st.subheader("Último Perfil do Cliente Enviado:")
+    st.write({
+        "Nome da Empresa/Cliente": data[1],
+        "Site": data[2],
+        "Tipo de Cliente": json.loads(data[3]),
+        "Nome do Contato": data[4],
+        "E-mail": data[5],
+        "Telefone": data[6],
+        "Endereço": data[7],
+        "Não Possuo Endereço Físico": data[8],
+        "Valor de Capital Disponível": data[9],
+        "Faturamento Desejado": data[10],
+        "Serviços Requeridos": json.loads(data[11]),
+        "Forma de Pagamento Preferida": json.loads(data[12]),
+        "Meio pelo qual veio": data[13],
+        "Ramo de Negócio": json.loads(data[14]),
+        "Tipo de Negócio": data[15],
+        "Contexto e Objetivos": data[16],
+        "Tempo para Retorno Desejado": data[17],
+        "Análise de Mercado": data[18],
+        "Dificuldades Enfrentadas": data[19],
+        "CNPJ/CPF": data[20],
+        "Número de Funcionários": data[21],
+        "Logo Path": data[22],
+        "PDF Path": data[23],
+        "Video Path": data[24]
     })
-    
-    if pdf_path:
-        st.write(f"**PDF Gerado:** [client_profile.pdf]({pdf_path})")
