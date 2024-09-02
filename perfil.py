@@ -9,16 +9,27 @@ from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
 from dotenv import load_dotenv
 
-# Carregar variáveis de ambiente
+# Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
-# Função para autenticar o usuário via OAuth 2.0
 def authenticate_user():
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
+
+    # Carregar o client_secret.json a partir da variável de ambiente
+    client_secrets = {
+        "web": {
+            "client_id": os.getenv('GOOGLE_CLIENT_ID'),
+            "project_id": os.getenv('GOOGLE_PROJECT_ID'),
+            "auth_uri": os.getenv('GOOGLE_AUTH_URI'),
+            "token_uri": os.getenv('GOOGLE_TOKEN_URI'),
+            "auth_provider_x509_cert_url": os.getenv('GOOGLE_AUTH_PROVIDER_CERT_URL'),
+            "client_secret": os.getenv('GOOGLE_CLIENT_SECRET'),
+            "redirect_uris": [os.getenv('GOOGLE_REDIRECT_URI')]
+        }
+    }
     
-    # Caminho absoluto para o arquivo client_secret.json
-    client_secrets_path = 'C:\\Users\\NIL\\Desktop\\PERFIL\\client_secret.json'
-    flow = Flow.from_client_secrets_file(client_secrets_path, scopes=SCOPES, redirect_uri='http://localhost:8501')
+    redirect_uri = os.getenv('GOOGLE_REDIRECT_URI')
+    flow = Flow.from_client_config(client_secrets, scopes=SCOPES, redirect_uri=redirect_uri)
     
     st.write("Verificando o estado da autenticação...")
 
@@ -39,9 +50,9 @@ def authenticate_user():
             except Exception as e:
                 st.write(f"Erro ao trocar o código por um token: {e}")
         return None
-    
+
     credentials = Credentials(**st.session_state['credentials'])
-    
+
     if not credentials.valid:
         if credentials.expired and credentials.refresh_token:
             st.write("Credenciais expiradas. Tentando atualizar...")
@@ -57,7 +68,7 @@ def authenticate_user():
             auth_url, _ = flow.authorization_url(prompt='consent')
             st.write(f'[Clique aqui para autenticar novamente]({auth_url})')
             return None
-    
+
     return credentials
 
 def credentials_to_dict(credentials):
@@ -70,7 +81,6 @@ def credentials_to_dict(credentials):
         'scopes': credentials.scopes
     }
 
-# Função para fazer upload de arquivos para o Google Drive
 def upload_file_to_drive(service, file, folder_id=None):
     if file is None:
         st.error("Nenhum arquivo selecionado para upload.")
@@ -95,21 +105,18 @@ def upload_file_to_drive(service, file, folder_id=None):
         st.error(f"Erro ao fazer upload do arquivo '{file.name}': {e}")
         return None
     finally:
-        # Remova a linha abaixo se não quiser remover o arquivo temporário
-        # try:
-        #     os.remove(file_path)
-        # except Exception as e:
-        #     st.error(f"Erro ao remover o arquivo temporário '{file_path}': {e}")
-        pass
+        # Remover arquivo temporário após upload
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            st.error(f"Erro ao remover o arquivo temporário '{file_path}': {e}")
     
-    return uploaded_file.get('id')
+    return file_id
 
-# Função para criar conexão com o banco de dados
 def create_connection():
     conn = sqlite3.connect('client_profiles.db')
     return conn
 
-# Função para criar a tabela no banco de dados
 def create_table():
     conn = create_connection()
     with conn:
@@ -127,7 +134,6 @@ def create_table():
         ''')
         conn.commit()
 
-# Função para inserir dados no banco de dados
 def insert_data(data, logo_path=None, pdf_path=None, video_path=None):
     conn = create_connection()
     try:
@@ -152,92 +158,78 @@ def insert_data(data, logo_path=None, pdf_path=None, video_path=None):
     finally:
         conn.close()
 
-# Streamlit app
 st.title("Levantamento de Perfil do Cliente")
 create_table()
 
 # ID da pasta no Google Drive onde os arquivos serão enviados
-FOLDER_ID = '13X_YJqvB3jGdOxCCIrNzt5vi8UwtWNlE'
+GOOGLE_DRIVE_FOLDER_ID = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
 
-# Autenticação do usuário via OAuth
-credentials = authenticate_user()
+if not GOOGLE_DRIVE_FOLDER_ID:
+    st.error("ID da pasta do Google Drive não encontrado.")
+else:
+    # Autenticação do usuário via OAuth
+    credentials = authenticate_user()
 
-if credentials:
-    drive_service = build('drive', 'v3', credentials=credentials)
+    if credentials:
+        drive_service = build('drive', 'v3', credentials=credentials)
 
-    # Formulário de entrada
-    with st.form(key='profile_form'):
-        company_name = st.text_input("Nome da Empresa/Cliente")
-        website = st.text_input("Website")
-        client_type = st.text_input("Tipo de Cliente")
-        contact_name = st.text_input("Nome do Contato")
-        email = st.text_input("Email")
-        phone = st.text_input("Telefone")
-        address = st.text_input("Endereço")
-        no_physical_address = st.checkbox("Sem endereço físico")
-        capital = st.text_input("Capital")
-        desired_revenue = st.text_input("Receita Desejada")
-        services = st.text_area("Serviços")
-        payment_methods = st.text_input("Métodos de Pagamento")
-        source = st.text_input("Fonte")
-        business_field = st.text_input("Campo de Negócio")
-        business_type = st.text_input("Tipo de Negócio")
-        context = st.text_area("Contexto")
-        return_time = st.text_input("Tempo de Retorno")
-        market_analysis = st.checkbox("Análise de Mercado")
-        difficulties = st.text_area("Dificuldades")
-        cnpj_or_cpf = st.text_input("CNPJ ou CPF")
-        employees = st.text_input("Número de Funcionários")
-        
-        # Botão de envio
-        submit_button = st.form_submit_button(label="Enviar")
+        # Formulário de entrada
+        with st.form(key='profile_form'):
+            company_name = st.text_input("Nome da Empresa/Cliente")
+            website = st.text_input("Website")
+            client_type = st.text_input("Tipo de Cliente")
+            contact_name = st.text_input("Nome do Contato")
+            email = st.text_input("Email")
+            phone = st.text_input("Telefone")
+            address = st.text_input("Endereço")
+            no_physical_address = st.checkbox("Sem endereço físico")
+            capital = st.text_input("Capital")
+            desired_revenue = st.text_input("Receita Desejada")
+            services = st.text_input("Serviços")
+            payment_methods = st.text_input("Métodos de Pagamento")
+            source = st.text_input("Fonte")
+            business_field = st.text_input("Campo de Negócio")
+            business_type = st.text_input("Tipo de Negócio")
+            context = st.text_input("Contexto")
+            return_time = st.text_input("Tempo de Retorno")
+            market_analysis = st.checkbox("Análise de Mercado")
+            difficulties = st.text_input("Dificuldades")
+            cnpj_or_cpf = st.text_input("CNPJ ou CPF")
+            employees = st.text_input("Número de Funcionários")
 
-        if submit_button:
-            st.write("Formulário enviado. Iniciando o upload dos arquivos...")
+            # Campos para uploads
+            logo_file = st.file_uploader("Envie o Logotipo (opcional)", type=['png', 'jpg', 'jpeg'])
+            pdf_file = st.file_uploader("Envie o PDF (opcional)", type='pdf')
+            video_file = st.file_uploader("Envie o Vídeo (opcional)", type=['mp4', 'avi', 'mov'])
 
-            data = {
-                'company_name': company_name,
-                'website': website,
-                'client_type': client_type,
-                'contact_name': contact_name,
-                'email': email,
-                'phone': phone,
-                'address': address,
-                'no_physical_address': no_physical_address,
-                'capital': capital,
-                'desired_revenue': desired_revenue,
-                'services': services,
-                'payment_methods': payment_methods,
-                'source': source,
-                'business_field': business_field,
-                'business_type': business_type,
-                'context': context,
-                'return_time': return_time,
-                'market_analysis': market_analysis,
-                'difficulties': difficulties,
-                'cnpj_or_cpf': cnpj_or_cpf,
-                'employees': employees
-            }
+            submit_button = st.form_submit_button("Enviar")
 
-            # Verificar se arquivos foram carregados
-            logo_file = st.file_uploader("Carregar Logotipo", type=['jpg', 'jpeg', 'png'])
-            pdf_file = st.file_uploader("Carregar PDF", type=['pdf'])
-            video_file = st.file_uploader("Carregar Vídeo", type=['mp4', 'mpeg4'])
+            if submit_button:
+                # Envio dos arquivos para o Google Drive
+                if logo_file:
+                    logo_file_id = upload_file_to_drive(drive_service, logo_file, GOOGLE_DRIVE_FOLDER_ID)
+                else:
+                    logo_file_id = None
 
-            logo_id = None
-            pdf_id = None
-            video_id = None
-            
-            if logo_file:
-                st.write(f"Logotipo carregado: {logo_file.name}")
-                logo_id = upload_file_to_drive(drive_service, logo_file, folder_id=FOLDER_ID)
-            
-            if pdf_file:
-                st.write(f"PDF carregado: {pdf_file.name}")
-                pdf_id = upload_file_to_drive(drive_service, pdf_file, folder_id=FOLDER_ID)
-            
-            if video_file:
-                st.write(f"Vídeo carregado: {video_file.name}")
-                video_id = upload_file_to_drive(drive_service, video_file, folder_id=FOLDER_ID)
-            
-            insert_data(data, logo_path=logo_id, pdf_path=pdf_id, video_path=video_id)
+                if pdf_file:
+                    pdf_file_id = upload_file_to_drive(drive_service, pdf_file, GOOGLE_DRIVE_FOLDER_ID)
+                else:
+                    pdf_file_id = None
+
+                if video_file:
+                    video_file_id = upload_file_to_drive(drive_service, video_file, GOOGLE_DRIVE_FOLDER_ID)
+                else:
+                    video_file_id = None
+
+                # Dados do formulário
+                data = {
+                    'company_name': company_name, 'website': website, 'client_type': client_type,
+                    'contact_name': contact_name, 'email': email, 'phone': phone, 'address': address,
+                    'no_physical_address': no_physical_address, 'capital': capital,
+                    'desired_revenue': desired_revenue, 'services': services, 'payment_methods': payment_methods,
+                    'source': source, 'business_field': business_field, 'business_type': business_type,
+                    'context': context, 'return_time': return_time, 'market_analysis': market_analysis,
+                    'difficulties': difficulties, 'cnpj_or_cpf': cnpj_or_cpf, 'employees': employees
+                }
+
+                insert_data(data, logo_path=logo_file_id, pdf_path=pdf_file_id, video_path=video_file_id)
