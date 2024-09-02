@@ -33,6 +33,9 @@ def authenticate_google_drive():
 
 # Função para fazer o upload do arquivo para o Google Drive
 def upload_file_to_drive(service, file, folder_id=None):
+    if file is None:
+        return None
+
     # Salvar o arquivo temporariamente
     file_path = f"temp_{file.name}"
     with open(file_path, "wb") as f:
@@ -42,12 +45,17 @@ def upload_file_to_drive(service, file, folder_id=None):
     if folder_id:
         file_metadata['parents'] = [folder_id]
     media = MediaFileUpload(file_path, resumable=True)
-    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    
+    try:
+        uploaded_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    except Exception as e:
+        st.error(f"Erro ao fazer upload do arquivo: {e}")
+        return None
     
     # Remover o arquivo temporário após o upload
     os.remove(file_path)
     
-    return file.get('id')
+    return uploaded_file.get('id')
 
 # Função para carregar variáveis de ambiente
 load_dotenv()
@@ -185,28 +193,38 @@ with st.form(key='profile_form'):
         address = st.text_area("Endereço")
         no_physical_address = st.checkbox("Não possuo endereço físico")
         capital = st.text_input("Capital")
-        desired_revenue = st.text_input("Receita Desejada")
-        services = st.multiselect("Serviços")
-        payment_methods = st.multiselect("Métodos de Pagamento")
+        desired_revenue = st.text_input("Faturamento Desejado")
+        services = st.multiselect("Serviços Oferecidos", 
+                                  ["Consultoria", "Desenvolvimento de Software", "Design", 
+                                   "Marketing", "Treinamento", "Outro"])
+        payment_methods = st.multiselect("Métodos de Pagamento", 
+                                         ["Boleto", "Transferência Bancária", "Cartão de Crédito", 
+                                          "PayPal", "Pix", "Outro"])
         source = st.text_input("Fonte")
-        business_field = st.text_input("Área de Negócio")
+        business_field = st.text_input("Área de Atuação")
         business_type = st.text_input("Tipo de Negócio")
 
     with col3:
-        context = st.text_area("Contexto do Negócio")
+        context = st.text_area("Contexto")
         return_time = st.text_input("Tempo de Retorno")
         market_analysis = st.checkbox("Análise de Mercado")
-        difficulties = st.text_area("Dificuldades")
+        difficulties = st.text_area("Dificuldades Encontradas")
         cnpj_or_cpf = st.text_input("CNPJ/CPF")
         employees = st.text_input("Número de Funcionários")
 
-    submit_button = st.form_submit_button("Enviar")
+    # Campos para upload de arquivos
+    st.subheader("Upload de Arquivos")
+    logo = st.file_uploader("Carregar Logotipo", type=['jpg', 'png', 'jpeg'])
+    pdf = st.file_uploader("Carregar PDF", type=['pdf'])
+    video = st.file_uploader("Carregar Vídeo", type=['mp4', 'mov', 'avi'])
 
+    # Enviar dados
+    submit_button = st.form_submit_button("Enviar")
     if submit_button:
-        submitted = True
         data = {
             'company_name': company_name,
             'website': website,
+            'website_no_site': website_no_site,
             'client_type': client_type,
             'contact_name': contact_name,
             'city': city,
@@ -230,28 +248,16 @@ with st.form(key='profile_form'):
             'employees': employees
         }
 
-        # Upload dos arquivos
-        st.file_uploader("Faça o upload do logo", type=["png", "jpg", "jpeg"], key="logo")
-        st.file_uploader("Faça o upload do PDF", type=["pdf"], key="pdf")
-        st.file_uploader("Faça o upload do vídeo", type=["mp4"], key="video")
-
-        # Conecte-se ao Google Drive
+        # Autenticar e fazer upload dos arquivos
         drive_service = authenticate_google_drive()
-        folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
-
-        # Enviar arquivos para o Google Drive
-        logo_file = st.session_state.get('logo')
-        pdf_file = st.session_state.get('pdf')
-        video_file = st.session_state.get('video')
-
-        logo_file_id = upload_file_to_drive(drive_service, logo_file, folder_id) if logo_file else None
-        pdf_file_id = upload_file_to_drive(drive_service, pdf_file, folder_id) if pdf_file else None
-        video_file_id = upload_file_to_drive(drive_service, video_file, folder_id) if video_file else None
+        logo_id = upload_file_to_drive(drive_service, logo) if logo else None
+        pdf_id = upload_file_to_drive(drive_service, pdf) if pdf else None
+        video_id = upload_file_to_drive(drive_service, video) if video else None
 
         # Inserir dados no banco de dados
-        insert_data(data, logo_file_id, pdf_file_id, video_file_id)
-
-        st.success("Formulário enviado com sucesso!")
-
-        # Limpar o formulário
+        insert_data(data, logo_path=logo_id, pdf_path=pdf_id, video_path=video_id)
+        
+        # Limpar formulário após envio
         clear_form()
+
+        st.success("Dados enviados com sucesso!")
