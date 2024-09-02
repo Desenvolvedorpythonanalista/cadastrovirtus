@@ -179,90 +179,79 @@ with st.form(key='profile_form'):
         phone = f"({phone_dd}) {phone_number}"
 
     with col2:
-        market_segment = st.multiselect("Segmento de Mercado", ["B2B", "B2C", "Ainda não decidi"])
-        address = st.text_input("Endereço Físico")
+        market_segment = st.multiselect("Segmento de Mercado", 
+                                        ["Tecnologia", "Educação", "Saúde", "Financeira", "Comércio", 
+                                         "Serviços", "Outro"])
+        address = st.text_area("Endereço")
         no_physical_address = st.checkbox("Não possuo endereço físico")
-        capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1 milhão", "Mais de 1 milhão"]
-        capital = st.selectbox("Capital Disponível", capital_options)
+        capital = st.text_input("Capital")
         desired_revenue = st.text_input("Receita Desejada")
-        services = st.multiselect("Serviços que deseja contratar (Escolha todos que se aplicam)", 
-                                  ["Gestão", "Programação", "Marketing", "Criação de Sites e Aplicações", 
-                                   "Dashboards", "Data Analytics", "Machine Learning e IA", 
-                                   "Consultoria", "Outros"])
-        payment_methods = st.multiselect("Formas de Pagamento Preferenciais", 
-                                         ["Cartão de Crédito", "Boleto", "Transferência", 
-                                          "PIX", "À Vista"])
+        services = st.multiselect("Serviços")
+        payment_methods = st.multiselect("Métodos de Pagamento")
+        source = st.text_input("Fonte")
+        business_field = st.text_input("Área de Negócio")
+        business_type = st.text_input("Tipo de Negócio")
 
     with col3:
-        source = st.text_input("Como nos conheceu?")
-        business_field = st.text_input("Área de atuação")
-        business_type = st.text_input("Tipo de Negócio")
-        context = st.text_area("Contexto da Empresa e suas Necessidades")
-        return_time = st.text_input("Qual o melhor horário para retornar?")
-        market_analysis = st.checkbox("Deseja uma análise de mercado para sua empresa?")
-        difficulties = st.text_area("Principais dificuldades enfrentadas no seu negócio")
-        cnpj_or_cpf = st.text_input("CNPJ ou CPF")
-        employees = st.text_input("Quantos colaboradores fazem parte da sua empresa?")
+        context = st.text_area("Contexto do Negócio")
+        return_time = st.text_input("Tempo de Retorno")
+        market_analysis = st.checkbox("Análise de Mercado")
+        difficulties = st.text_area("Dificuldades")
+        cnpj_or_cpf = st.text_input("CNPJ/CPF")
+        employees = st.text_input("Número de Funcionários")
 
-    # Upload de arquivos
-    st.markdown("---")
-    st.subheader("Upload de Arquivos")
-    logo_file = st.file_uploader("Upload da Logo (PNG, JPG)", type=["png", "jpg"])
-    pdf_file = st.file_uploader("Upload do PDF (PDF)", type=["pdf"])
-    video_file = st.file_uploader("Upload do Vídeo (MP4)", type=["mp4"])
-
-    # Enviar o formulário
     submit_button = st.form_submit_button("Enviar")
 
-# Processamento do formulário
-if submit_button:
-    # Autenticação no Google Drive
-    drive_service = authenticate_google_drive()
+    if submit_button:
+        submitted = True
+        data = {
+            'company_name': company_name,
+            'website': website,
+            'client_type': client_type,
+            'contact_name': contact_name,
+            'city': city,
+            'email': email,
+            'phone': phone,
+            'market_segment': market_segment,
+            'address': address,
+            'no_physical_address': no_physical_address,
+            'capital': capital,
+            'desired_revenue': desired_revenue,
+            'services': services,
+            'payment_methods': payment_methods,
+            'source': source,
+            'business_field': business_field,
+            'business_type': business_type,
+            'context': context,
+            'return_time': return_time,
+            'market_analysis': market_analysis,
+            'difficulties': difficulties,
+            'cnpj_or_cpf': cnpj_or_cpf,
+            'employees': employees
+        }
 
-    # Inicializa variáveis de caminho
-    logo_path = pdf_path = video_path = None
+        # Upload dos arquivos
+        st.file_uploader("Faça o upload do logo", type=["png", "jpg", "jpeg"], key="logo")
+        st.file_uploader("Faça o upload do PDF", type=["pdf"], key="pdf")
+        st.file_uploader("Faça o upload do vídeo", type=["mp4"], key="video")
 
-    # Upload de arquivos para o Google Drive
-    folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')  # Substitua pelo ID da pasta no Drive
+        # Conecte-se ao Google Drive
+        drive_service = authenticate_google_drive()
+        folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
 
-    if logo_file:
-        logo_path = f"https://drive.google.com/uc?id={upload_file_to_drive(drive_service, logo_file, folder_id)}"
-    
-    if pdf_file:
-        pdf_path = f"https://drive.google.com/uc?id={upload_file_to_drive(drive_service, pdf_file, folder_id)}"
-    
-    if video_file:
-        video_path = f"https://drive.google.com/uc?id={upload_file_to_drive(drive_service, video_file, folder_id)}"
+        # Enviar arquivos para o Google Drive
+        logo_file = st.session_state.get('logo')
+        pdf_file = st.session_state.get('pdf')
+        video_file = st.session_state.get('video')
 
-    # Dados do formulário
-    form_data = {
-        'company_name': company_name,
-        'website': website if not website_no_site else 'Não possui',
-        'client_type': client_type,
-        'contact_name': contact_name,
-        'email': email,
-        'phone': phone,
-        'address': address if not no_physical_address else 'Não possui',
-        'no_physical_address': no_physical_address,
-        'capital': capital,
-        'desired_revenue': desired_revenue,
-        'services': services,
-        'payment_methods': payment_methods,
-        'source': source,
-        'business_field': business_field,
-        'business_type': business_type,
-        'context': context,
-        'return_time': return_time,
-        'market_analysis': market_analysis,
-        'difficulties': difficulties,
-        'cnpj_or_cpf': cnpj_or_cpf,
-        'employees': employees,
-    }
+        logo_file_id = upload_file_to_drive(drive_service, logo_file, folder_id) if logo_file else None
+        pdf_file_id = upload_file_to_drive(drive_service, pdf_file, folder_id) if pdf_file else None
+        video_file_id = upload_file_to_drive(drive_service, video_file, folder_id) if video_file else None
 
-    # Inserir os dados no banco de dados
-    insert_data(form_data, logo_path=logo_path, pdf_path=pdf_path, video_path=video_path)
+        # Inserir dados no banco de dados
+        insert_data(data, logo_file_id, pdf_file_id, video_file_id)
 
-    # Limpar o formulário
-    clear_form()
+        st.success("Formulário enviado com sucesso!")
 
-    st.success("Perfil enviado com sucesso!")
+        # Limpar o formulário
+        clear_form()
