@@ -2,8 +2,11 @@ import os
 import json
 import streamlit as st
 import sqlite3
-from fpdf import FPDF
-from tempfile import NamedTemporaryFile
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Função para criar conexão com o banco de dados
 def create_connection():
@@ -85,62 +88,62 @@ def insert_data(data, logo_path=None, pdf_path=None, video_path=None):
         finally:
             conn.close()
 
-# Função para gerar o PDF
-def generate_pdf(data, logo_path=None):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
+# Função para autenticar no Google Drive
+def authenticate_google_drive():
+    SCOPES = ['https://www.googleapis.com/auth/drive.file']
+    
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'client_secret_297185839442-0m4p4sbfbodbqsk816ca3q0o14phbk5u.apps.googleusercontent.com.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+    
+    return build('drive', 'v3', credentials=creds)
 
-    headings = [
-        "Nome da Empresa/Cliente", "Site", "Tipo de Cliente", "Nome do Contato", "Cidade", "E-mail", "Telefone",
-        "Endereço", "Não Possuo Endereço Físico", "Valor de Capital Disponível", "Faturamento Desejado",
-        "Serviços Requeridos", "Forma de Pagamento Preferida", "Meio pelo qual veio", "Ramo de Negócio",
-        "Tipo de Negócio", "Contexto e Objetivos", "Tempo para Retorno Desejado", "Análise de Mercado", "Dificuldades Enfrentadas",
-        "CNPJ/CPF", "Número de Funcionários"
-    ]
+# Função para fazer o upload do arquivo para o Google Drive
+def upload_file_to_drive(service, file_path, folder_id=None):
+    file_metadata = {'name': os.path.basename(file_path)}
+    if folder_id:
+        file_metadata['parents'] = [folder_id]
+    media = MediaFileUpload(file_path, resumable=True)
+    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    return file.get('id')
 
-    pdf.set_fill_color(255, 255, 255)
-    pdf.set_text_color(0, 0, 0)
-
-    for heading, value in zip(headings, data):
-        if isinstance(value, list):
-            value = ', '.join(value)
-        elif value is None:
-            value = 'Não disponível'
-        
-        pdf.cell(200, 10, txt=f"{heading}: {value}", ln=True, align='L')
-
-    if logo_path and os.path.exists(logo_path):
-        try:
-            pdf.image(logo_path, x=10, y=pdf.get_y() + 10, w=50)
-        except Exception as e:
-            st.error(f"Erro ao adicionar logo ao PDF: {e}")
-
-    # Salvar o PDF em um arquivo temporário
-    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        pdf_output_path = tmp_file.name
-        try:
-            pdf.output(pdf_output_path)
-        except Exception as e:
-            st.error(f"Erro ao salvar PDF: {e}")
-    return pdf_output_path
-
-# Função para recuperar e exibir dados do banco de dados
-def get_data():
-    conn = create_connection()
-    if conn is not None:
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM profiles ORDER BY id DESC LIMIT 1")  # Recupera o último registro inserido
-            data = cursor.fetchone()
-        except sqlite3.Error as e:
-            st.error(f"Erro ao recuperar dados: {e}")
-            data = None
-        finally:
-            conn.close()
-    else:
-        data = None
-    return data
+# Função para limpar o formulário
+def clear_form():
+    st.session_state['company_name'] = ''
+    st.session_state['website'] = ''
+    st.session_state['website_no_site'] = False
+    st.session_state['client_type'] = []
+    st.session_state['contact_name'] = ''
+    st.session_state['city'] = ''
+    st.session_state['email'] = ''
+    st.session_state['phone_dd'] = ''
+    st.session_state['phone_number'] = ''
+    st.session_state['market_segment'] = []
+    st.session_state['address'] = ''
+    st.session_state['no_physical_address'] = False
+    st.session_state['capital'] = ''
+    st.session_state['desired_revenue'] = ''
+    st.session_state['services'] = []
+    st.session_state['payment_methods'] = []
+    st.session_state['source'] = ''
+    st.session_state['business_field'] = ''
+    st.session_state['business_type'] = ''
+    st.session_state['context'] = ''
+    st.session_state['return_time'] = ''
+    st.session_state['market_analysis'] = False
+    st.session_state['difficulties'] = ''
+    st.session_state['cnpj_or_cpf'] = ''
+    st.session_state['employees'] = ''
 
 # Streamlit app
 st.title("Levantamento de Perfil do Cliente")
@@ -168,11 +171,6 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
-
-# Verificar se o diretório de uploads existe
-upload_dir = "uploads"
-if not os.path.exists(upload_dir):
-    os.makedirs(upload_dir)
 
 # Variável para controlar se o formulário foi enviado
 submitted = False
@@ -202,160 +200,92 @@ with st.form(key='profile_form'):
         address = st.text_input("Endereço Físico")
         no_physical_address = st.checkbox("Não possuo endereço físico")
         
-        capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1milhão", "Acima de 1 milhão"]
-        capital = st.selectbox("Valor de Capital Disponível", capital_options)
+        capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1mi"]
+        capital = st.selectbox("Capital Disponível", capital_options)
         
-        desired_revenue = st.text_input("Faturamento Desejado")
-        services = st.multiselect("Serviços Requeridos (Escolha todos que se aplicam)", 
-                                  ["Desenvolvimento Web", "Consultoria", "Marketing", "Design", "Análise de Dados", "Outros"])
-        
-        payment_methods = st.multiselect("Forma de Pagamento Preferida", 
-                                          ["Pix", "Transferência Bancária", "Boleto", "Cartão de Crédito", "Débito em Conta", "Outros"])
+        desired_revenue_options = ["10mil", "20mil", "30mil", "40mil", "50mil", "100mil", "200mil", "300mil", "400mil", "500mil"]
+        desired_revenue = st.selectbox("Faturamento Desejado", desired_revenue_options)
+
+        services = st.multiselect("Serviços Requeridos (Escolha todas as opções que se aplicam)", 
+                                 ["Desenvolvimento Web", "Consultoria", "Design Gráfico", "Marketing Digital", 
+                                  "Suporte Técnico", "Treinamento", "Outros"])
 
     with col3:
-        source = st.selectbox("Meio pelo qual veio", ["Indicação", "Redes Sociais", "Publicidade", "Evento", "Outros"])
-        business_field = st.selectbox("Ramo de Negócio", 
-                                      ["Tecnologia", "Educação", "Saúde", "Finanças", "Varejo", "Outros"])
-        
+        payment_methods = st.multiselect("Formas de Pagamento Preferidas", 
+                                         ["Boleto", "Cartão de Crédito", "Transferência Bancária", "PIX", "PayPal", "Outros"])
+        source = st.text_input("Como conheceu nossa empresa?")
+        business_field = st.text_input("Ramo de Negócio")
         business_type = st.text_input("Tipo de Negócio")
-        context = st.text_area("Contexto e Objetivos", height=200)
-        
-        return_time = st.selectbox("Tempo para Retorno Desejado", 
-                                    ["Imediato", "6 meses", "1 ano", "2 anos", "Outro"])
-        market_analysis = st.checkbox("Desejo uma análise de mercado para minha empresa")
-        
-        difficulties = st.text_area("Principais Dificuldades", height=200)
-        cnpj_or_cpf = st.text_input("CNPJ ou CPF")
-        
+        context = st.text_area("Contexto e Objetivos")
+        return_time = st.text_input("Tempo para Retorno Desejado")
+        market_analysis = st.checkbox("Fez alguma análise de mercado?")
+        difficulties = st.text_area("Dificuldades Enfrentadas")
+        cnpj_or_cpf = st.text_input("CNPJ/CPF")
         employees = st.text_input("Número de Funcionários")
 
-    # Uploads dos arquivos
-    st.header("Uploads de Arquivos")
-    logo_file = st.file_uploader("Faça o upload do logo da empresa", type=['jpg', 'jpeg', 'png'])
-    pdf_file = st.file_uploader("Faça o upload de um PDF (opcional)", type=['pdf'])
-    video_file = st.file_uploader("Faça o upload de um vídeo de apresentação (opcional)", type=['mp4', 'mov', 'avi'])
+    logo_file = st.file_uploader("Upload do Logo", type=['png', 'jpg', 'jpeg'])
+    pdf_file = st.file_uploader("Upload do PDF", type=['pdf'])
+    video_file = st.file_uploader("Upload do Vídeo", type=['mp4', 'mov', 'avi'])
+    
+    submit_button = st.form_submit_button("Enviar")
 
-    # Submissão do formulário
-    submitted = st.form_submit_button("Enviar Formulário")
+    if submit_button:
+        submitted = True
+        # Salvar arquivos se forem enviados
+        upload_dir = 'uploads'
+        os.makedirs(upload_dir, exist_ok=True)
 
-# Processamento dos dados após submissão do formulário
-if submitted:
-    # Definir os caminhos para salvar os arquivos
-    logo_path = None
-    pdf_path = None
-    video_path = None
+        if logo_file:
+            logo_path = os.path.join(upload_dir, logo_file.name)
+            with open(logo_path, "wb") as f:
+                f.write(logo_file.read())
+        else:
+            logo_path = None
 
-    if logo_file is not None:
-        logo_path = os.path.join(upload_dir, f"{company_name}_logo.{logo_file.name.split('.')[-1]}")
-        with open(logo_path, "wb") as f:
-            f.write(logo_file.getbuffer())
+        if pdf_file:
+            pdf_path = os.path.join(upload_dir, pdf_file.name)
+            with open(pdf_path, "wb") as f:
+                f.write(pdf_file.read())
+        else:
+            pdf_path = None
 
-    if pdf_file is not None:
-        pdf_path = os.path.join(upload_dir, f"{company_name}_document.pdf")
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_file.getbuffer())
+        if video_file:
+            video_path = os.path.join(upload_dir, video_file.name)
+            with open(video_path, "wb") as f:
+                f.write(video_file.read())
+        else:
+            video_path = None
 
-    if video_file is not None:
-        video_path = os.path.join(upload_dir, f"{company_name}_video.{video_file.name.split('.')[-1]}")
-        with open(video_path, "wb") as f:
-            f.write(video_file.getbuffer())
+        # Dados do formulário
+        data = [
+            company_name, website, client_type, contact_name, city, email, phone, address, no_physical_address, 
+            capital, desired_revenue, services, payment_methods, source, business_field, business_type, context, 
+            return_time, market_analysis, difficulties, cnpj_or_cpf, None, None, None, employees
+        ]
+        
+        # Inserir dados no banco de dados
+        insert_data(data, logo_path, pdf_path, video_path)
 
-    # Dados do formulário
-    form_data = [
-        company_name,
-        website if not website_no_site else "Não possuo site",
-        client_type,
-        contact_name,
-        email,
-        phone,
-        address,
-        no_physical_address,
-        capital,
-        desired_revenue,
-        services,
-        payment_methods,
-        source,
-        business_field,
-        business_type,
-        context,
-        return_time,
-        market_analysis,
-        difficulties,
-        cnpj_or_cpf,
-        employees
-    ]
+        # Autenticar no Google Drive e fazer upload dos arquivos
+        service = authenticate_google_drive()
+        folder_id = '13X_YJqvB3jGdOxCCIrNzt5vi8UwtWNlE'  # ID da pasta do Google Drive onde o arquivo será salvo
 
-    # Inserir os dados no banco de dados
-    insert_data(form_data, logo_path=logo_path, pdf_path=pdf_path, video_path=video_path)
+        if logo_path:
+            upload_file_to_drive(service, logo_path, folder_id)
+        if pdf_path:
+            upload_file_to_drive(service, pdf_path, folder_id)
+        if video_path:
+            upload_file_to_drive(service, video_path, folder_id)
 
-    # Gerar o PDF
-    pdf_output_path = generate_pdf(form_data, logo_path=logo_path)
+        st.success("Dados enviados com sucesso!")
 
-    # Exibir mensagem de sucesso e fornecer link para o PDF
-    st.success("Formulário enviado com sucesso!")
-    st.write(f"O PDF gerado foi salvo em: {pdf_output_path}")
-
-    # Exibir link para download do PDF gerado
-    with open(pdf_output_path, "rb") as pdf_file:
-        st.download_button(
-            label="Baixar PDF",
-            data=pdf_file,
-            file_name=f"{company_name}_perfil.pdf",
-            mime="application/pdf"
-        )
-
-    # Recuperar e exibir os dados do banco de dados
-    profile_data = get_data()
-    if profile_data:
-        st.header("Último Perfil Cadastrado")
-        st.write(f"Nome da Empresa: {profile_data[1]}")
-        st.write(f"Site: {profile_data[2]}")
-        st.write(f"Tipo de Cliente: {profile_data[3]}")
-        st.write(f"Nome do Contato: {profile_data[4]}")
-        st.write(f"E-mail: {profile_data[5]}")
-        st.write(f"Telefone: {profile_data[6]}")
-        st.write(f"Endereço: {profile_data[7]}")
-        st.write(f"Capital Disponível: {profile_data[9]}")
-        st.write(f"Faturamento Desejado: {profile_data[10]}")
-        st.write(f"Serviços Requeridos: {profile_data[11]}")
-        st.write(f"Forma de Pagamento: {profile_data[12]}")
-        st.write(f"Meio pelo qual veio: {profile_data[13]}")
-        st.write(f"Ramo de Negócio: {profile_data[14]}")
-        st.write(f"Tipo de Negócio: {profile_data[15]}")
-        st.write(f"Contexto e Objetivos: {profile_data[16]}")
-        st.write(f"Tempo para Retorno Desejado: {profile_data[17]}")
-        st.write(f"Análise de Mercado: {profile_data[18]}")
-        st.write(f"Dificuldades Enfrentadas: {profile_data[19]}")
-        st.write(f"CNPJ/CPF: {profile_data[20]}")
-        st.write(f"Número de Funcionários: {profile_data[23]}")
-
-# Adicionar uma função para limpar o formulário após submissão bem-sucedida
-def clear_form():
-    st.session_state['company_name'] = ''
-    st.session_state['website'] = ''
-    st.session_state['website_no_site'] = False
-    st.session_state['client_type'] = []
-    st.session_state['contact_name'] = ''
-    st.session_state['city'] = ''
-    st.session_state['email'] = ''
-    st.session_state['phone_dd'] = ''
-    st.session_state['phone_number'] = ''
-    st.session_state['market_segment'] = []
-    st.session_state['address'] = ''
-    st.session_state['no_physical_address'] = False
-    st.session_state['capital'] = ''
-    st.session_state['desired_revenue'] = ''
-    st.session_state['services'] = []
-    st.session_state['payment_methods'] = []
-    st.session_state['source'] = ''
-    st.session_state['business_field'] = ''
-    st.session_state['business_type'] = ''
-    st.session_state['context'] = ''
-    st.session_state['return_time'] = ''
-    st.session_state['market_analysis'] = False
-    st.session_state['difficulties'] = ''
-    st.session_state['cnpj_or_cpf'] = ''
-    st.session_state['employees'] = ''
-
-if submitted:
-    clear_form()
+        # Limpar o formulário
+        clear_form()
+        
+        # Limpar arquivos temporários
+        if logo_path and os.path.exists(logo_path):
+            os.remove(logo_path)
+        if pdf_path and os.path.exists(pdf_path):
+            os.remove(pdf_path)
+        if video_path and os.path.exists(video_path):
+            os.remove(video_path)
