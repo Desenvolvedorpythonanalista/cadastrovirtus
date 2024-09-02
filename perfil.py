@@ -176,8 +176,6 @@ if not os.path.exists(upload_dir):
 
 # Variável para controlar se o formulário foi enviado
 submitted = False
-pdf_path = None
-video_path = None
 
 # Formulário de entrada
 with st.form(key='profile_form'):
@@ -216,100 +214,148 @@ with st.form(key='profile_form'):
 
     with col3:
         source = st.selectbox("Meio pelo qual veio", ["Indicação", "Redes Sociais", "Publicidade", "Evento", "Outros"])
-        business_field = st.selectbox("Ramo de Negócio", ["Tecnologia", "Educação", "Saúde", "Varejo", "Serviços", "Outros"])
-        business_type = st.selectbox("Tipo de Negócio", ["Produto", "Serviço", "Assinatura", "Marketplace", "Outro"])
+        business_field = st.selectbox("Ramo de Negócio", 
+                                      ["Tecnologia", "Educação", "Saúde", "Finanças", "Varejo", "Outros"])
         
-        context = st.text_area("Contexto e Objetivos")
-        return_time = st.selectbox("Tempo para Retorno Desejado", ["1 mês", "3 meses", "6 meses", "1 ano", "Mais de 1 ano"])
+        business_type = st.text_input("Tipo de Negócio")
+        context = st.text_area("Contexto e Objetivos", height=200)
         
-        market_analysis = st.checkbox("Possui análise de mercado?")
-        difficulties = st.text_area("Dificuldades Enfrentadas")
-        cnpj_or_cpf = st.text_input("CNPJ/CPF")
+        return_time = st.selectbox("Tempo para Retorno Desejado", 
+                                    ["Imediato", "6 meses", "1 ano", "2 anos", "Outro"])
+        market_analysis = st.checkbox("Desejo uma análise de mercado para minha empresa")
+        
+        difficulties = st.text_area("Principais Dificuldades", height=200)
+        cnpj_or_cpf = st.text_input("CNPJ ou CPF")
+        
         employees = st.text_input("Número de Funcionários")
 
-    st.subheader("Enviar Arquivos")
-    logo_upload = st.file_uploader("Upload de Logo (opcional)", type=["jpg", "jpeg", "png"])
-    pdf_upload = st.file_uploader("Upload de PDF (opcional)", type=["pdf"])
-    video_upload = st.file_uploader("Upload de Vídeo (opcional)", type=["mp4", "mov", "avi"])
+    # Uploads dos arquivos
+    st.header("Uploads de Arquivos")
+    logo_file = st.file_uploader("Faça o upload do logo da empresa", type=['jpg', 'jpeg', 'png'])
+    pdf_file = st.file_uploader("Faça o upload de um PDF (opcional)", type=['pdf'])
+    video_file = st.file_uploader("Faça o upload de um vídeo de apresentação (opcional)", type=['mp4', 'mov', 'avi'])
 
-    submit_button = st.form_submit_button(label='Salvar Perfil')
+    # Submissão do formulário
+    submitted = st.form_submit_button("Enviar Formulário")
 
-    if submit_button:
-        submitted = True
-
-        # Salvar arquivos
-        logo_path = None
-        pdf_path = None
-        video_path = None
-
-        if logo_upload:
-            logo_path = os.path.join(upload_dir, logo_upload.name)
-            with open(logo_path, "wb") as f:
-                f.write(logo_upload.read())
-
-        if pdf_upload:
-            pdf_path = os.path.join(upload_dir, pdf_upload.name)
-            with open(pdf_path, "wb") as f:
-                f.write(pdf_upload.read())
-
-        if video_upload:
-            video_path = os.path.join(upload_dir, video_upload.name)
-            with open(video_path, "wb") as f:
-                f.write(video_upload.read())
-
-        # Inserir dados no banco de dados
-        insert_data([
-            company_name, website, client_type, contact_name, email, phone, address,
-            no_physical_address, capital, desired_revenue, services, payment_methods, source, 
-            business_field, business_type, context, return_time, market_analysis, difficulties, 
-            cnpj_or_cpf, employees
-        ], logo_path, pdf_path, video_path)
-
-        # Gerar PDF se a opção estiver marcada
-        if pdf_path:
-            pdf_path = generate_pdf([
-                company_name, website, client_type, contact_name, city, email, phone, address, 
-                'Sim' if no_physical_address else 'Não', capital, desired_revenue, services, 
-                payment_methods, source, business_field, business_type, context, return_time, 
-                'Sim' if market_analysis else 'Não', difficulties, cnpj_or_cpf, employees
-            ], logo_path)
-
-        st.success("Perfil salvo com sucesso!")
-
-# Mostrar os dados do último perfil salvo
+# Processamento dos dados após submissão do formulário
 if submitted:
-    data = get_data()
-    if data:
-        st.subheader("Último Perfil Salvo")
-        st.write({
-            "Nome da Empresa/Cliente": data[1],
-            "Site": data[2],
-            "Tipo de Cliente": json.loads(data[3]) if data[3] else None,
-            "Nome do Contato": data[4],
-            "E-mail": data[5],
-            "Telefone": data[6],
-            "Endereço": data[7],
-            "Não Possuo Endereço Físico": 'Sim' if data[8] else 'Não',
-            "Valor de Capital Disponível": data[9],
-            "Faturamento Desejado": data[10],
-            "Serviços Requeridos": json.loads(data[11]) if data[11] else None,
-            "Forma de Pagamento Preferida": json.loads(data[12]) if data[12] else None,
-            "Meio pelo qual veio": data[13],
-            "Ramo de Negócio": data[14],
-            "Tipo de Negócio": data[15],
-            "Contexto e Objetivos": data[16],
-            "Tempo para Retorno Desejado": data[17],
-            "Análise de Mercado": 'Sim' if data[18] else 'Não',
-            "Dificuldades Enfrentadas": data[19],
-            "CNPJ/CPF": data[20],
-            "Número de Funcionários": data[21]
-        })
+    # Definir os caminhos para salvar os arquivos
+    logo_path = None
+    pdf_path = None
+    video_path = None
 
-        if data[22]:
-            st.image(data[22], caption="Logo", use_column_width=True)
+    if logo_file is not None:
+        logo_path = os.path.join(upload_dir, f"{company_name}_logo.{logo_file.name.split('.')[-1]}")
+        with open(logo_path, "wb") as f:
+            f.write(logo_file.getbuffer())
 
-        if data[23]:
-            st.write(f"PDF gerado: [Clique aqui para baixar]({data[23]})")
+    if pdf_file is not None:
+        pdf_path = os.path.join(upload_dir, f"{company_name}_document.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_file.getbuffer())
 
-        if data[24]:
-            st.video(data[24], caption="Vídeo")
+    if video_file is not None:
+        video_path = os.path.join(upload_dir, f"{company_name}_video.{video_file.name.split('.')[-1]}")
+        with open(video_path, "wb") as f:
+            f.write(video_file.getbuffer())
+
+    # Dados do formulário
+    form_data = [
+        company_name,
+        website if not website_no_site else "Não possuo site",
+        client_type,
+        contact_name,
+        email,
+        phone,
+        address,
+        no_physical_address,
+        capital,
+        desired_revenue,
+        services,
+        payment_methods,
+        source,
+        business_field,
+        business_type,
+        context,
+        return_time,
+        market_analysis,
+        difficulties,
+        cnpj_or_cpf,
+        employees
+    ]
+
+    # Inserir os dados no banco de dados
+    insert_data(form_data, logo_path=logo_path, pdf_path=pdf_path, video_path=video_path)
+
+    # Gerar o PDF
+    pdf_output_path = generate_pdf(form_data, logo_path=logo_path)
+
+    # Exibir mensagem de sucesso e fornecer link para o PDF
+    st.success("Formulário enviado com sucesso!")
+    st.write(f"O PDF gerado foi salvo em: {pdf_output_path}")
+
+    # Exibir link para download do PDF gerado
+    with open(pdf_output_path, "rb") as pdf_file:
+        st.download_button(
+            label="Baixar PDF",
+            data=pdf_file,
+            file_name=f"{company_name}_perfil.pdf",
+            mime="application/pdf"
+        )
+
+    # Recuperar e exibir os dados do banco de dados
+    profile_data = get_data()
+    if profile_data:
+        st.header("Último Perfil Cadastrado")
+        st.write(f"Nome da Empresa: {profile_data[1]}")
+        st.write(f"Site: {profile_data[2]}")
+        st.write(f"Tipo de Cliente: {profile_data[3]}")
+        st.write(f"Nome do Contato: {profile_data[4]}")
+        st.write(f"E-mail: {profile_data[5]}")
+        st.write(f"Telefone: {profile_data[6]}")
+        st.write(f"Endereço: {profile_data[7]}")
+        st.write(f"Capital Disponível: {profile_data[9]}")
+        st.write(f"Faturamento Desejado: {profile_data[10]}")
+        st.write(f"Serviços Requeridos: {profile_data[11]}")
+        st.write(f"Forma de Pagamento: {profile_data[12]}")
+        st.write(f"Meio pelo qual veio: {profile_data[13]}")
+        st.write(f"Ramo de Negócio: {profile_data[14]}")
+        st.write(f"Tipo de Negócio: {profile_data[15]}")
+        st.write(f"Contexto e Objetivos: {profile_data[16]}")
+        st.write(f"Tempo para Retorno Desejado: {profile_data[17]}")
+        st.write(f"Análise de Mercado: {profile_data[18]}")
+        st.write(f"Dificuldades Enfrentadas: {profile_data[19]}")
+        st.write(f"CNPJ/CPF: {profile_data[20]}")
+        st.write(f"Número de Funcionários: {profile_data[23]}")
+
+# Adicionar uma função para limpar o formulário após submissão bem-sucedida
+def clear_form():
+    st.session_state['company_name'] = ''
+    st.session_state['website'] = ''
+    st.session_state['website_no_site'] = False
+    st.session_state['client_type'] = []
+    st.session_state['contact_name'] = ''
+    st.session_state['city'] = ''
+    st.session_state['email'] = ''
+    st.session_state['phone_dd'] = ''
+    st.session_state['phone_number'] = ''
+    st.session_state['market_segment'] = []
+    st.session_state['address'] = ''
+    st.session_state['no_physical_address'] = False
+    st.session_state['capital'] = ''
+    st.session_state['desired_revenue'] = ''
+    st.session_state['services'] = []
+    st.session_state['payment_methods'] = []
+    st.session_state['source'] = ''
+    st.session_state['business_field'] = ''
+    st.session_state['business_type'] = ''
+    st.session_state['context'] = ''
+    st.session_state['return_time'] = ''
+    st.session_state['market_analysis'] = False
+    st.session_state['difficulties'] = ''
+    st.session_state['cnpj_or_cpf'] = ''
+    st.session_state['employees'] = ''
+
+if submitted:
+    clear_form()
