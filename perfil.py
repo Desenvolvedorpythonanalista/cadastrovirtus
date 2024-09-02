@@ -28,6 +28,8 @@ def authenticate_user():
         }
     }
     
+    print("GOOGLE_DRIVE_FOLDER_ID:", os.getenv('GOOGLE_DRIVE_FOLDER_ID'))
+    
     redirect_uri = os.getenv('GOOGLE_REDIRECT_URI')
     flow = Flow.from_client_config(client_secrets, scopes=SCOPES, redirect_uri=redirect_uri)
     
