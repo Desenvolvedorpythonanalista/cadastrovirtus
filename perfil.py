@@ -63,6 +63,7 @@ def insert_data(data, logo_path=None, pdf_path=None, video_path=None):
             query = f'INSERT INTO profiles ({", ".join(columns)}) VALUES ({placeholders})'
 
             values = [json.dumps(item) if isinstance(item, list) else item for item in data]
+            values.extend([logo_path, pdf_path, video_path])
             cursor.execute(query, values)
             conn.commit()
         except sqlite3.Error as e:
@@ -85,12 +86,7 @@ def authenticate_google_drive():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-<<<<<<< HEAD
             flow = InstalledAppFlow.from_client_secrets_file(client_secrets_path, SCOPES)
-=======
-            flow = InstalledAppFlow.from_client_secrets_file(
-                client_secrets_path, SCOPES)
->>>>>>> 1f33cc5dded2753576eac642f6dd13434c6082a0
             creds = flow.run_local_server(port=0)
         with open(token_path, 'w') as token:
             token.write(creds.to_json())
@@ -98,27 +94,6 @@ def authenticate_google_drive():
     return build('drive', 'v3', credentials=creds)
 
 # Função para fazer o upload do arquivo para o Google Drive
-<<<<<<< HEAD
-def upload_file_to_drive(service, file, folder_id=None):
-    file_metadata = {'name': file.name}
-    if folder_id:
-        file_metadata['parents'] = [folder_id]
-    media = MediaFileUpload(file, resumable=True)
-    file_drive = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    return file_drive.get('id')
-
-# Função para limpar o formulário
-def clear_form():
-    fields = [
-        'company_name', 'website', 'website_no_site', 'client_type', 'contact_name',
-        'city', 'email', 'phone_dd', 'phone_number', 'market_segment', 'address',
-        'no_physical_address', 'capital', 'desired_revenue', 'services', 'payment_methods',
-        'source', 'business_field', 'business_type', 'context', 'return_time',
-        'market_analysis', 'difficulties', 'cnpj_or_cpf', 'employees'
-    ]
-    for field in fields:
-        st.session_state[field] = ''
-=======
 def upload_file_to_drive(service, file_path, folder_id=None):
     file_metadata = {'name': os.path.basename(file_path)}
     if folder_id:
@@ -154,7 +129,6 @@ def clear_form():
     st.session_state['difficulties'] = ''
     st.session_state['cnpj_or_cpf'] = ''
     st.session_state['employees'] = ''
->>>>>>> 1f33cc5dded2753576eac642f6dd13434c6082a0
 
 # Streamlit app
 st.title("Levantamento de Perfil do Cliente")
@@ -199,120 +173,71 @@ with st.form(key='profile_form'):
         market_segment = st.multiselect("Segmento de Mercado", ["B2B", "B2C", "Ainda não decidi"])
         address = st.text_input("Endereço Físico")
         no_physical_address = st.checkbox("Não possuo endereço físico")
-<<<<<<< HEAD
-        capital = st.selectbox("Capital Disponível", ["20mil", "40mil", "60mil", "80mil", 
-                                                     "100mil", "200mil", "400mil", "600mil", 
-                                                     "800mil", "1 milhão", "Mais de 1 milhão"])
-        desired_revenue = st.text_input("Receita Desejada")
-        services = st.multiselect("Serviços Desejados", ["Consultoria", "Desenvolvimento Web", 
-                                                         "Marketing Digital", "Gestão de Projetos", "Outros"])
-        payment_methods = st.multiselect("Formas de Pagamento", ["Pix", "Boleto", "Cartão de Crédito", 
-                                                                 "Transferência", "PayPal", "Outros"])
-        source = st.text_input("Fonte de Aquisição")
-
-=======
-        
         capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1 milhão", "Mais de 1 milhão"]
         capital = st.selectbox("Capital Disponível", capital_options)
-        
         desired_revenue = st.text_input("Receita Desejada")
-        
         services = st.multiselect("Serviços que deseja contratar (Escolha todos que se aplicam)", 
                                   ["Consultoria", "Desenvolvimento Web", "Marketing Digital", "Gestão de Projetos", "Outros"])
-        
-        payment_methods = st.multiselect("Formas de Pagamento Preferidas (Escolha todas que se aplicam)", 
-                                         ["Pix", "Boleto", "Cartão de Crédito", "Transferência", "PayPal", "Outros"])
-        
-        source = st.text_input("Fonte de Aquisição")
-        
->>>>>>> 1f33cc5dded2753576eac642f6dd13434c6082a0
-    with col3:
-        business_field = st.text_input("Área de Atuação")
+        payment_methods = st.multiselect("Métodos de Pagamento Aceitos", ["Boleto", "Cartão de Crédito", "Transferência Bancária", "Pix", "Outros"])
+        source = st.selectbox("Fonte de Tráfego", ["Instagram", "Google Ads", "Facebook", "LinkedIn", "WhatsApp", "Outro"])
+        business_field = st.text_input("Campo de Atuação do Negócio")
         business_type = st.text_input("Tipo de Negócio")
+
+    with col3:
         context = st.text_area("Contexto do Projeto")
-        return_time = st.text_input("Prazo de Retorno")
-        market_analysis = st.checkbox("Análise de Mercado Concluída")
+        return_time = st.text_input("Prazo para Retorno")
+        market_analysis = st.checkbox("Fez uma análise de mercado?")
         difficulties = st.text_area("Dificuldades Encontradas")
-        cnpj_or_cpf = st.text_input("CNPJ ou CPF")
+        cnpj_or_cpf = st.text_input("CNPJ/CPF")
         employees = st.text_input("Número de Funcionários")
+        logo = st.file_uploader("Faça upload do logo da empresa", type=["png", "jpg", "jpeg"])
+        pdf = st.file_uploader("Faça upload do documento PDF", type=["pdf"])
+        video = st.file_uploader("Faça upload do vídeo", type=["mp4", "mov", "avi"])
 
-    st.markdown("<hr>", unsafe_allow_html=True)
-<<<<<<< HEAD
-
-    # Upload de arquivos
-=======
-    
-    # Arquivos
->>>>>>> 1f33cc5dded2753576eac642f6dd13434c6082a0
-    st.subheader("Envio de Arquivos")
-    uploaded_logo = st.file_uploader("Envie o Logo da Empresa", type=['jpg', 'jpeg', 'png'])
-    uploaded_pdf = st.file_uploader("Envie o PDF", type=['pdf'])
-    uploaded_video = st.file_uploader("Envie o Vídeo", type=['mp4'])
-
-    # Submissão do formulário
     submit_button = st.form_submit_button(label="Enviar")
-    
+
     if submit_button:
-        # Prepara os dados
-<<<<<<< HEAD
-        form_data = [
-            company_name, website, client_type, contact_name, email, phone, address, no_physical_address,
-            capital, desired_revenue, services, payment_methods, source, business_field, business_type,
-            context, return_time, market_analysis, difficulties, cnpj_or_cpf, employees
-        ]
-
-        # Salva os dados no banco de dados
-        insert_data(form_data, uploaded_logo.name if uploaded_logo else None, 
-                    uploaded_pdf.name if uploaded_pdf else None, 
-                    uploaded_video.name if uploaded_video else None)
-
-        # Autentica no Google Drive
-        drive_service = authenticate_google_drive()
-
-        # Faz upload dos arquivos, se fornecidos
-        if uploaded_logo:
-            upload_file_to_drive(drive_service, uploaded_logo)
-        if uploaded_pdf:
-            upload_file_to_drive(drive_service, uploaded_pdf)
-        if uploaded_video:
-            upload_file_to_drive(drive_service, uploaded_video)
-
-        st.success("Formulário enviado com sucesso!")
         submitted = True
-
-# Limpar formulário após submissão bem-sucedida
-if submitted:
-    clear_form()
-=======
-        form_data = [company_name, website, client_type, contact_name, email, phone, address, no_physical_address, 
-                     capital, desired_revenue, services, payment_methods, source, business_field, business_type, 
-                     context, return_time, market_analysis, difficulties, cnpj_or_cpf, employees]
+        data = {
+            'company_name': company_name,
+            'website': website,
+            'client_type': client_type,
+            'contact_name': contact_name,
+            'city': city,
+            'email': email,
+            'phone': phone,
+            'address': address,
+            'no_physical_address': no_physical_address,
+            'capital': capital,
+            'desired_revenue': desired_revenue,
+            'services': services,
+            'payment_methods': payment_methods,
+            'source': source,
+            'business_field': business_field,
+            'business_type': business_type,
+            'context': context,
+            'return_time': return_time,
+            'market_analysis': market_analysis,
+            'difficulties': difficulties,
+            'cnpj_or_cpf': cnpj_or_cpf,
+            'employees': employees
+        }
         
-        # Adiciona os caminhos dos arquivos se disponíveis
-        logo_path = uploaded_logo.name if uploaded_logo else None
-        pdf_path = uploaded_pdf.name if uploaded_pdf else None
-        video_path = uploaded_video.name if uploaded_video else None
+        # Salvar dados no banco de dados
+        insert_data(data)
 
-        # Salva os dados no banco de dados
-        insert_data(form_data, logo_path, pdf_path, video_path)
-        
-        # Upload dos arquivos para o Google Drive
+        # Autenticar no Google Drive
         drive_service = authenticate_google_drive()
         
-        if uploaded_logo:
-            logo_drive_id = upload_file_to_drive(drive_service, uploaded_logo)
-            st.success(f"Logo enviado com sucesso! ID do arquivo no Drive: {logo_drive_id}")
+        # Upload dos arquivos
+        logo_id = upload_file_to_drive(drive_service, logo.name) if logo else None
+        pdf_id = upload_file_to_drive(drive_service, pdf.name) if pdf else None
+        video_id = upload_file_to_drive(drive_service, video.name) if video else None
 
-        if uploaded_pdf:
-            pdf_drive_id = upload_file_to_drive(drive_service, uploaded_pdf)
-            st.success(f"PDF enviado com sucesso! ID do arquivo no Drive: {pdf_drive_id}")
+        st.success("Dados enviados com sucesso!")
+        st.write(f"ID do logo: {logo_id}")
+        st.write(f"ID do PDF: {pdf_id}")
+        st.write(f"ID do vídeo: {video_id}")
 
-        if uploaded_video:
-            video_drive_id = upload_file_to_drive(drive_service, uploaded_video)
-            st.success(f"Vídeo enviado com sucesso! ID do arquivo no Drive: {video_drive_id}")
-
-        # Limpar o formulário após o envio
+        # Limpar o formulário
         clear_form()
-        submitted = True
-        st.success("Formulário enviado com sucesso!")
->>>>>>> 1f33cc5dded2753576eac642f6dd13434c6082a0
