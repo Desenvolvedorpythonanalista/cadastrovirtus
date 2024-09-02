@@ -1,0 +1,8 @@
+# Arquivos e pastas para ignorar
+.env
+token.json
+client_secret.json
+*.pyc
+__pycache__/
+*.db
+*.sqlite3

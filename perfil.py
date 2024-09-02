@@ -2,11 +2,15 @@ import os
 import json
 import streamlit as st
 import sqlite3
+from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # Função para criar conexão com o banco de dados
 def create_connection():
@@ -93,17 +97,20 @@ def authenticate_google_drive():
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
     
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    token_path = os.getenv('GOOGLE_TOKEN_PATH', 'token.json')
+    client_secrets_path = os.getenv('GOOGLE_CLIENT_SECRETS_PATH', 'client_secret.json')
+    
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                'client_secret_297185839442-0m4p4sbfbodbqsk816ca3q0o14phbk5u.apps.googleusercontent.com.json', SCOPES)
+                client_secrets_path, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
+        with open(token_path, 'w') as token:
             token.write(creds.to_json())
     
     return build('drive', 'v3', credentials=creds)
@@ -200,92 +207,70 @@ with st.form(key='profile_form'):
         address = st.text_input("Endereço Físico")
         no_physical_address = st.checkbox("Não possuo endereço físico")
         
-        capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1mi"]
+        capital_options = ["20mil", "40mil", "60mil", "80mil", "100mil", "200mil", "400mil", "600mil", "800mil", "1 milhão", "Mais de 1 milhão"]
         capital = st.selectbox("Capital Disponível", capital_options)
         
-        desired_revenue_options = ["10mil", "20mil", "30mil", "40mil", "50mil", "100mil", "200mil", "300mil", "400mil", "500mil"]
-        desired_revenue = st.selectbox("Faturamento Desejado", desired_revenue_options)
-
-        services = st.multiselect("Serviços Requeridos (Escolha todas as opções que se aplicam)", 
-                                 ["Desenvolvimento Web", "Consultoria", "Design Gráfico", "Marketing Digital", 
-                                  "Suporte Técnico", "Treinamento", "Outros"])
-
+        desired_revenue = st.text_input("Receita Desejada")
+        
+        services = st.multiselect("Serviços que deseja contratar (Escolha todos que se aplicam)", 
+                                  ["Consultoria", "Desenvolvimento Web", "Marketing Digital", "Gestão de Projetos", "Outros"])
+        
+        payment_methods = st.multiselect("Formas de Pagamento Preferidas (Escolha todas que se aplicam)", 
+                                         ["Pix", "Boleto", "Cartão de Crédito", "Transferência", "PayPal", "Outros"])
+        
+        source = st.text_input("Fonte de Aquisição")
+        
     with col3:
-        payment_methods = st.multiselect("Formas de Pagamento Preferidas", 
-                                         ["Boleto", "Cartão de Crédito", "Transferência Bancária", "PIX", "PayPal", "Outros"])
-        source = st.text_input("Como conheceu nossa empresa?")
-        business_field = st.text_input("Ramo de Negócio")
+        business_field = st.text_input("Área de Atuação")
         business_type = st.text_input("Tipo de Negócio")
-        context = st.text_area("Contexto e Objetivos")
-        return_time = st.text_input("Tempo para Retorno Desejado")
-        market_analysis = st.checkbox("Fez alguma análise de mercado?")
-        difficulties = st.text_area("Dificuldades Enfrentadas")
-        cnpj_or_cpf = st.text_input("CNPJ/CPF")
+        context = st.text_area("Contexto do Projeto")
+        return_time = st.text_input("Prazo de Retorno")
+        market_analysis = st.checkbox("Análise de Mercado Concluída")
+        difficulties = st.text_area("Dificuldades Encontradas")
+        cnpj_or_cpf = st.text_input("CNPJ ou CPF")
         employees = st.text_input("Número de Funcionários")
 
-    logo_file = st.file_uploader("Upload do Logo", type=['png', 'jpg', 'jpeg'])
-    pdf_file = st.file_uploader("Upload do PDF", type=['pdf'])
-    video_file = st.file_uploader("Upload do Vídeo", type=['mp4', 'mov', 'avi'])
+    st.markdown("<hr>", unsafe_allow_html=True)
     
-    submit_button = st.form_submit_button("Enviar")
+    # Arquivos
+    st.subheader("Envio de Arquivos")
+    uploaded_logo = st.file_uploader("Envie o Logo da Empresa", type=['jpg', 'jpeg', 'png'])
+    uploaded_pdf = st.file_uploader("Envie o PDF", type=['pdf'])
+    uploaded_video = st.file_uploader("Envie o Vídeo", type=['mp4'])
 
+    # Submissão do formulário
+    submit_button = st.form_submit_button(label="Enviar")
+    
     if submit_button:
-        submitted = True
-        # Salvar arquivos se forem enviados
-        upload_dir = 'uploads'
-        os.makedirs(upload_dir, exist_ok=True)
-
-        if logo_file:
-            logo_path = os.path.join(upload_dir, logo_file.name)
-            with open(logo_path, "wb") as f:
-                f.write(logo_file.read())
-        else:
-            logo_path = None
-
-        if pdf_file:
-            pdf_path = os.path.join(upload_dir, pdf_file.name)
-            with open(pdf_path, "wb") as f:
-                f.write(pdf_file.read())
-        else:
-            pdf_path = None
-
-        if video_file:
-            video_path = os.path.join(upload_dir, video_file.name)
-            with open(video_path, "wb") as f:
-                f.write(video_file.read())
-        else:
-            video_path = None
-
-        # Dados do formulário
-        data = [
-            company_name, website, client_type, contact_name, city, email, phone, address, no_physical_address, 
-            capital, desired_revenue, services, payment_methods, source, business_field, business_type, context, 
-            return_time, market_analysis, difficulties, cnpj_or_cpf, None, None, None, employees
-        ]
+        # Prepara os dados
+        form_data = [company_name, website, client_type, contact_name, email, phone, address, no_physical_address, 
+                     capital, desired_revenue, services, payment_methods, source, business_field, business_type, 
+                     context, return_time, market_analysis, difficulties, cnpj_or_cpf, employees]
         
-        # Inserir dados no banco de dados
-        insert_data(data, logo_path, pdf_path, video_path)
+        # Adiciona os caminhos dos arquivos se disponíveis
+        logo_path = uploaded_logo.name if uploaded_logo else None
+        pdf_path = uploaded_pdf.name if uploaded_pdf else None
+        video_path = uploaded_video.name if uploaded_video else None
 
-        # Autenticar no Google Drive e fazer upload dos arquivos
-        service = authenticate_google_drive()
-        folder_id = '13X_YJqvB3jGdOxCCIrNzt5vi8UwtWNlE'  # ID da pasta do Google Drive onde o arquivo será salvo
+        # Salva os dados no banco de dados
+        insert_data(form_data, logo_path, pdf_path, video_path)
+        
+        # Upload dos arquivos para o Google Drive
+        drive_service = authenticate_google_drive()
+        
+        if uploaded_logo:
+            logo_drive_id = upload_file_to_drive(drive_service, uploaded_logo)
+            st.success(f"Logo enviado com sucesso! ID do arquivo no Drive: {logo_drive_id}")
 
-        if logo_path:
-            upload_file_to_drive(service, logo_path, folder_id)
-        if pdf_path:
-            upload_file_to_drive(service, pdf_path, folder_id)
-        if video_path:
-            upload_file_to_drive(service, video_path, folder_id)
+        if uploaded_pdf:
+            pdf_drive_id = upload_file_to_drive(drive_service, uploaded_pdf)
+            st.success(f"PDF enviado com sucesso! ID do arquivo no Drive: {pdf_drive_id}")
 
-        st.success("Dados enviados com sucesso!")
+        if uploaded_video:
+            video_drive_id = upload_file_to_drive(drive_service, uploaded_video)
+            st.success(f"Vídeo enviado com sucesso! ID do arquivo no Drive: {video_drive_id}")
 
-        # Limpar o formulário
+        # Limpar o formulário após o envio
         clear_form()
-        
-        # Limpar arquivos temporários
-        if logo_path and os.path.exists(logo_path):
-            os.remove(logo_path)
-        if pdf_path and os.path.exists(pdf_path):
-            os.remove(pdf_path)
-        if video_path and os.path.exists(video_path):
-            os.remove(video_path)
+        submitted = True
+        st.success("Formulário enviado com sucesso!")
